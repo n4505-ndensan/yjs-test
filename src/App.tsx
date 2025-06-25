@@ -29,7 +29,7 @@ const App: Component = () => {
   const [chat, setChat] = createSignal<ChatMsg[]>([]);
   const [serverCounter, setServerCounter] = createSignal<number>(0)
 
-  let [state, setState] = createSignal<State>("leaved");
+  let [state, setState] = createSignal<State>("disconnected");
 
   wsProvider.on('status', (event: any) => {
     console.log(event.status) // logs "connected" or "disconnected"
