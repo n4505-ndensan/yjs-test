@@ -6,7 +6,7 @@ import { HocuspocusProvider } from '@hocuspocus/provider'
 
 const doc = new Y.Doc()
 const wsProvider = new HocuspocusProvider({
-  url: 'ws://localhost:1234',
+  url: 'ws://yjs-test-aix2.vercel.app:1234',
   name: 'my-roomname',
   document: doc,
 })
