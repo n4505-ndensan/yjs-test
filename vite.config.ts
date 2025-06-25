@@ -8,8 +8,9 @@ export default defineConfig({
   },
   build: {
     target: 'esnext',
+    
+    rollupOptions: {
+
+    }
   },
-  optimizeDeps: {
-    exclude: ["./src-server"]
-  }
 });
