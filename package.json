@@ -4,19 +4,25 @@
   "description": "",
   "type": "module",
   "scripts": {
-    "start": "vite",
+    "start": "concurrently \"npm run start-client\" \"npm run start-server\"",
+    "start-client": "vite",
+    "start-server": "tsx src-server/server.ts",
     "dev": "vite",
     "build": "vite build",
     "serve": "vite preview"
   },
   "license": "MIT",
   "devDependencies": {
+    "concurrently": "^9.2.0",
     "typescript": "^5.7.2",
+    "tsx": "^4.20.3",
     "vite": "^6.0.0",
     "vite-plugin-solid": "^2.11.6"
   },
   "dependencies": {
-    "@y/websocket-server": "^0.1.1",
+    "@hocuspocus/provider": "^3.1.7",
+    "@hocuspocus/extension-sqlite": "^3.1.7",
+    "@hocuspocus/server": "^3.1.7",
     "solid-js": "^1.9.5",
     "y-websocket": "^3.0.0",
     "yjs": "^13.6.27"

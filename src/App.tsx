@@ -1,49 +1,73 @@
 import { createSignal, For, onCleanup, onMount, Show, type Component } from 'solid-js';
-import { reconcile } from 'solid-js/store'
-
-import logo from './logo.svg';
 import styles from './App.module.css';
 
 import * as Y from 'yjs'
-import { WebsocketProvider } from 'y-websocket'
+import { HocuspocusProvider } from '@hocuspocus/provider'
 
 const doc = new Y.Doc()
-const wsProvider = new WebsocketProvider('ws://localhost:1234', 'my-roomname', doc, {
-  connect: true
+const wsProvider = new HocuspocusProvider({
+  url: 'ws://localhost:1234',
+  name: 'my-roomname',
+  document: doc,
 })
 
-type State = "leaved" | "joined";
+interface ChatMsg {
+  time: number;
+  author: string;
+  content: string;
+}
+
+type State = "disconnected" | "leaved" | "joined";
 
 const App: Component = () => {
-  let inputRef: HTMLInputElement;
+  let nameInputRef: HTMLInputElement;
+  let chatMsgInputRef: HTMLInputElement;
+
+
   const [myName, setMyName] = createSignal<string>("");
   const [names, setNames] = createSignal<string[]>([]);
+  const [chat, setChat] = createSignal<ChatMsg[]>([]);
+  const [serverCounter, setServerCounter] = createSignal<number>(0)
 
   let [state, setState] = createSignal<State>("leaved");
 
-
-  wsProvider.on('status', event => {
+  wsProvider.on('status', (event: any) => {
     console.log(event.status) // logs "connected" or "disconnected"
-    if (event.status === "disconnected") leave();
+    if (event.status !== "connected") {
+      setState("disconnected")
+    }
+    if (event.status === "disconnected") {
+      leave();
+    }
+
   })
 
+  const getUsersList = () => {
+    const users = new Map<string, string>(doc.getMap("users"))
+    return [...users.values().toArray()]
+  }
+
   onMount(() => {
-    doc.getMap("users").observeDeep(() => {
+    doc.on("updateV2", () => {
       const users = new Map<string, string>(doc.getMap("users"))
 
       setMyName(users.get(doc.clientID.toString()) ?? "")
-      setNames([...users.values().toArray()])
+      setNames(getUsersList())
+
+      const chat = doc.getArray<ChatMsg>("chat").toArray()
+      setChat(chat ?? [])
+
+      setServerCounter(Number(doc.getMap("server").get("counter")))
     })
 
     const users = new Map<string, string>(doc.getMap("users"))
     setMyName(users.get(doc.clientID.toString()) ?? "")
-    setNames([...users.values().toArray()])
+    setNames(getUsersList())
   })
 
   window.addEventListener("beforeunload", (e) => {
     e.preventDefault();
-    if (state() !== "joined") return;
-    leave();
+    if (state() === "joined") leave();
   })
 
 
@@ -65,45 +89,96 @@ const App: Component = () => {
     setState("leaved");
   }
 
+  function sendChat(msg: string) {
+    const chat = doc.getArray<ChatMsg>("chat")
+
+    chat.push([{
+      time: Date.now(),
+      author: myName(),
+      content: msg
+    }])
+
+    const update = Y.encodeStateAsUpdateV2(doc)
+    Y.applyUpdateV2(doc, update)
+  }
+
   return (
     <div class={styles.App}>
       <main>
+        <div style={{ display: "flex", "flex-direction": "row", "justify-content": "center", gap: "24px", "margin-top": "24px" }}>
+          <div style={{ display: "flex", "flex-direction": "column", width: "300px", gap: "4px" }}>
+            <p>
+              {serverCounter()}
+            </p>
 
-        <Show when={state() === "leaved"}>
-          <input ref={(ref) => inputRef = ref} name="username" placeholder='your name'></input>
-
-          <button onClick={() => {
-            join(inputRef.value);
-          }}>
-            join
-          </button>
-        </Show>
+            <Show when={state() === "disconnected"}>
+              <p>wow disconnected!</p>
+            </Show>
 
 
-        <Show when={state() === "joined"}>
-          <h1>welcome, {myName()}</h1>
-          <button onClick={() => {
-            leave();
-          }} >leave</button>
+            <Show when={state() === "leaved"}>
+              <h1>join</h1>
 
-          <button onClick={async () => {
-            doc.getMap("users").clear();
-            const update = Y.encodeStateAsUpdateV2(doc)
-            Y.applyUpdateV2(doc, update)
+              <input ref={(ref) => nameInputRef = ref} name="username" placeholder='your name'></input>
 
-          }} >clear</button>
-        </Show>
-        <div style={{ display: "flex", "flex-direction": "column", gap: "4px" }}>
-          <p style={{ margin: 0 }}>connected users</p>
-          <For each={names()}>
-            {(name) => {
-              return <p style={{ margin: 0 }}>{name}</p>
-            }}
-          </For>
+              <button onClick={() => {
+                const inputName = nameInputRef.value
+                if (!inputName || inputName === "") {
+                  alert("invalid name");
+                  return
+                }
+                if (getUsersList().includes(inputName)) {
+                  alert("name already used");
+                  return
+                }
+
+                join(inputName)
+              }}>
+                join
+              </button>
+            </Show>
+
+
+            <Show when={state() === "joined"}>
+              <h1>welcome, {myName()}</h1>
+              <button onClick={() => {
+                leave();
+              }} >leave</button>
+
+              <div style={{ display: "flex", "flex-direction": "column", "align-items": "start", }}>
+                <p style={{ margin: 0, "margin-top": "16px" }}>connected users</p>
+                <For each={names()}>
+                  {(name) => {
+                    return <p style={{ margin: 0, color: name === myName() ? "red" : "inherit" }}>{name}</p>
+                  }}
+                </For>
+              </div>
+            </Show>
+          </div>
+
+          <Show when={state() === "joined"}>
+            <div style={{ position: "relative", display: "flex", "flex-direction": "column", "align-items": "start", width: "300px", gap: "4px", "background-color": "#00000030" }}>
+
+              <p style={{ margin: 0, "margin-top": "16px" }}>chat</p>
+              <For each={chat()}>
+                {(msg) => {
+                  const date = new Date(msg.time)
+                  return <p style={{ margin: 0 }}>{String(date.getHours()).padStart(2, '0')}:{String(date.getMinutes()).padStart(2, '0')} {msg.author}: {msg.content}</p>
+                }}
+              </For>
+              <div style={{ display: "flex", "flex-direction": "row" }}>
+                <input ref={(ref) => chatMsgInputRef = ref} style={{ "flex-grow": 1 }} />
+                <button type="button" onClick={() => {
+                  const inputMsg = chatMsgInputRef.value
+                  if (inputMsg && inputMsg !== "") sendChat(inputMsg);
+                }} >send</button>
+              </div>
+            </div>
+          </Show>
         </div>
-      </main>
+      </main >
 
-    </div>
+    </div >
   );
 };
 
